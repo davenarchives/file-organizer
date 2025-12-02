@@ -41,6 +41,19 @@ def append_log(widget: tk.Text, message: str) -> None:
     widget.configure(state="disabled")
 
 
+def format_summary(summary: dict[str, object]) -> str:
+    """Build a readable summary string from organize() output."""
+    total = summary.get("total", 0)
+    by_cat = summary.get("by_category", {}) or {}
+    dry = summary.get("dry_run", False)
+    prefix = "Planned" if dry else "Moved"
+    lines = [f"{prefix} {total} file(s)."]
+    if by_cat:
+        parts = [f"{cat}: {count}" for cat, count in sorted(by_cat.items())]
+        lines.append("By category: " + ", ".join(parts))
+    return " ".join(lines)
+
+
 def run_organizer(
     source: Path, target: Path, dry_run: bool, log_widget: tk.Text
 ) -> None:
@@ -48,10 +61,12 @@ def run_organizer(
     buf = io.StringIO()
     try:
         with redirect_stdout(buf):
-            organize(source, target, dry_run=dry_run, create_source=True)
+            summary = organize(source, target, dry_run=dry_run, create_source=True)
         output = buf.getvalue().strip()
-        append_log(log_widget, output or "Done. No files needed moving.")
-        messagebox.showinfo("Organizer", "Finished.")
+        summary_text = format_summary(summary)
+        combined = "\n".join(filter(None, [output, summary_text]))
+        append_log(log_widget, combined or "Done. No files needed moving.")
+        messagebox.showinfo("Organizer", summary_text or "Finished.")
     except Exception as exc:  # pylint: disable=broad-except
         append_log(log_widget, f"Error: {exc}")
         messagebox.showerror("Organizer", str(exc))
@@ -163,19 +178,28 @@ def build_ui() -> None:
         background=CARD,
         foreground=TEXT,
     ).grid(row=9, column=0, sticky="w")
-    log = tk.Text(
+    log_frame = tk.Frame(
         container,
+        bg="#0c1329",
+        highlightthickness=1,
+        highlightbackground="#1f2937",
+        bd=0,
+        padx=6,
+        pady=6,
+    )
+    log_frame.grid(row=10, column=0, columnspan=3, sticky="we", pady=(6, 4))
+    log = tk.Text(
+        log_frame,
         height=10,
         width=62,
-        bg=BG,
+        bg="#0b1428",
         fg=TEXT,
         insertbackground=TEXT,
         relief="flat",
-        highlightthickness=1,
-        highlightbackground=CARD,
+        highlightthickness=0,
         wrap="word",
     )
-    log.grid(row=10, column=0, columnspan=3, sticky="we", pady=(6, 4))
+    log.pack(fill="both", expand=True)
     log.configure(state="disabled")
 
     # Actions row

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import shutil
+from collections import defaultdict
 from pathlib import Path
 
 # Mapping of category names to the file extensions they include.
@@ -129,8 +130,12 @@ def next_available_path(path: Path) -> Path:
 
 def organize(
     source: Path, target_root: Path, dry_run: bool, create_source: bool
-) -> None:
-    """Move files from source into categorized folders under target_root."""
+) -> dict[str, object]:
+    """
+    Move files from source into categorized folders under target_root.
+
+    Returns a summary dict with totals and per-category counts.
+    """
     if not source.exists():
         if create_source:
             source.mkdir(parents=True, exist_ok=True)
@@ -140,21 +145,52 @@ def organize(
     if not source.is_dir():
         raise NotADirectoryError(f"Source path is not a folder: {source}")
 
+    created_dirs: set[Path] = set()
+    counts: dict[str, int] = defaultdict(int)
+    total = 0
+
     for item in source.iterdir():
         if item.is_dir():
             continue
 
         category = pick_category(item.suffix)
         destination_dir = target_root / category
-        destination_dir.mkdir(parents=True, exist_ok=True)
 
         destination_path = next_available_path(destination_dir / item.name)
-
         if dry_run:
             print(f"[dry-run] {item} -> {destination_path}")
-        else:
-            shutil.move(str(item), destination_path)
-            print(f"Moved {item} -> {destination_path}")
+            counts[category] += 1
+            total += 1
+            continue
+
+        # Create the destination folder only when moving.
+        if not destination_dir.exists():
+            destination_dir.mkdir(parents=True, exist_ok=True)
+            created_dirs.add(destination_dir)
+
+        shutil.move(str(item), destination_path)
+        counts[category] += 1
+        total += 1
+        print(f"Moved {item} -> {destination_path}")
+
+    # Clean up any empty category folders we created during this run.
+    if not dry_run:
+        for created in created_dirs:
+            if created.exists() and not any(created.iterdir()):
+                created.rmdir()
+
+    summary = {
+        "total": total,
+        "by_category": dict(counts),
+        "dry_run": dry_run,
+    }
+
+    if dry_run:
+        print(f"Planned moves: {total} file(s).")
+    else:
+        print(f"Moved: {total} file(s).")
+
+    return summary
 
 
 def main() -> None:
