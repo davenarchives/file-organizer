@@ -18,6 +18,7 @@ CATEGORY_MAP: dict[str, set[str]] = {
         ".webp",
         ".heic",
         ".svg",
+        ".avif",
     },
     "Documents": {
         ".pdf",
